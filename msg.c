@@ -122,7 +122,7 @@ static struct ipc_ids msg_ids;
 #define msg_buildid(id, seq) \
 	ipc_buildid(&msg_ids, id, seq)
 
-static void freeque (int id);
+static void freeque (int id); //删除一个队列并释放相应的msgque元素项
 static int newque (key_t key, int msgflg);
 #ifdef CONFIG_PROC_FS
 static int sysvipc_msg_read_proc(char *buffer, char **start, off_t offset, int length, int *eof, void *data);
@@ -256,7 +256,7 @@ out_err:
 static int store_msg(void* dest, struct msg_msg* msg, int len)
 {
 	int alen;
-	struct msg_msgseg *seg;
+	struct msg_msgseg *seg;//MSGSEG   在单个队列里能存在的最大数量的消息片断。
 
 	alen = len;
 	if(alen > DATALEN_MSG)//一页减去msg结构大小
@@ -337,7 +337,7 @@ static void expunge_all(struct msg_queue* msq, int res)
 }
 
 //消息队列的移除，将所有正在等待的发送还是接收的进程全部唤醒,让其出错返回
-static void freeque (int id)
+static void freeque (int id)//删除一个队列并释放相应的msgque元素项
 {
 	struct msg_queue *msq;
 	struct list_head *tmp;//表头指针
@@ -357,8 +357,8 @@ static void freeque (int id)
 		free_msg(msg);
 	}
 	//将消息队列的消息长度计数从系统消息长度计数中删除
-	atomic_sub(msq->q_cbytes, &msg_bytes);
-	kfree(msq);
+	atomic_sub(msq->q_cbytes, &msg_bytes); 
+	kfree(msq); //释放
 }
 
 //获得消息队列，可以用于2个目的,通过给定的key创建队列或通过给定的key查找已存在队列
@@ -444,6 +444,7 @@ struct msq_setbuf {
 };
 
 //完成内核空间到用户空间的复制
+//copy_from_user用于将用户空间的数据传送到内核空间。
 static inline unsigned long copy_msqid_from_user(struct msq_setbuf *out, void *buf, int version)
 {
 	switch(version) {//区分64位及较低版本

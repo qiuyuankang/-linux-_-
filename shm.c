@@ -24,15 +24,22 @@
 #include <linux/proc_fs.h>
 #include <asm/uaccess.h>
 
-//在操作系统理论中，每当提到信号量、消息队列和共享内存，我们通常称之为“IPC机制”；但在Linux的具体实现中，它们通常作为一种实体存在，占用一定的内存，具有一定的逻辑结构并拥有一组既定的操作，因此在研究操作系统具体实现中，我们将其称为“IPC资源”。
+//在操作系统理论中，每当提到信号量、消息队列和共享内存，我们通常称之为“IPC机制”；但在Linux的具体实现中，它们通常作为一种实体存在，占用一定的内存，具有一定的逻辑结构并拥有一组既定的操//作，因此在研究操作系统具体实现中，我们将其称为“IPC资源”。
 #include "util.h"
 
-//共享内存允许两个或多个进程共享一给定的存储区，因为数据不需要来回复制，所以是最快的一种进程间通信机制。共享内存可以通过mmap()映射普通文件（特殊情况下还可以采用匿名映射）机制实现，也可以通过系统V共享内存机制实现。应用接口和原理很简单，内部机制复杂。为了实现更安全通信，往往还与信号灯等同步机制共同使用。
-//共享内存涉及到了存储管理以及文件系统等方面的知识，深入理解其内部机制需要紧紧抓住内核使用的重要数据结构。系统V共享内存是以文件的形式组织在特殊文件系统shm中的。通过shmget可以创建或获得共享内存的标识符。取得共享内存标识符后，要通过shmat将这个内存区映射到本进程的虚拟地址空间。
+//共享内存允许两个或多个进程共享一给定的存储区，因为数据不需要来回复制，所以是最快的一种进程间通信机制。共享内存可以通过mmap()映射普通文件（特殊情况下还可以采用匿名映射）机制实现，也//可以通过系统V共享内存机制实现。应用接口和原理很简单，内部机制复杂。为了实现更安全通信，往往还与信号灯等同步机制共同使用。
+//共享内存涉及到了存储管理以及文件系统等方面的知识，深入理解其内部机制需要紧紧抓住内核使用的重要数据结构。系统V共享内存是以文件的形式组织在特殊文件系统shm中的。通过shmget可以创建或获//得共享内存的标识符。取得共享内存标识符后，要通过shmat将这个内存区映射到本进程的虚拟地址空间。
 
-//共享内存允许一个或多个进程通过同时出现在它们的虚拟地址空间的内存通讯。这块虚拟内存的页面在每一个共享进程的页表中都有页表条目引用。但是不需要在所有进程的虚拟内存都有相同的地址。象所有的系统 V IPC 对象一样，对于共享内存区域的访问通过 key 控制，并进行访问权限检查。内存共享之后，就不再检查进程如何使用这块内存。它们必须依赖于其他机制，比如系统 V 的信号量来同步对于内存的访问。 
+//共享内存允许一个或多个进程通过同时出现在它们的虚拟地址空间的内存通讯。这块虚拟内存的页面在每一个共享进程的页表中都有页表条目引用。但是不需要在所有进程的虚拟内存都有相同的地址。象所//有的系统 V IPC 对象一样，对于共享内存区域的访问通过 key 控制，并进行访问权限检查。内存共享之后，就不再检查进程如何使用这块内存。它们必须依赖于其他机制，比如系统 V //的信号量来同步对于内存的访问。 
 
-//每一个新创建的内存区域都用一个 shmid_ds 数据结构来表达。这些数据结构保存在 shm_segs 向量表中。 Shmid_ds数据结构描述了这个共享内存取有多大、多少个进程在使用它以及共享内存如何映射到它们的地址空间。由共享内存的创建者来控制对于这块内存的访问权限和它的 key 是公开或私有。如果有足够的权限它也可以把共享内存锁定在物理内存中。 
+//每一个新创建的内存区域都用一个 shmid_ds 数据结构来表达。这些数据结构保存在 shm_segs 向量表中。 //Shmid_ds数据结构描述了这个共享内存取有多大、多少个进程在使用它以及共享内存如何映射到它们的地址空间。由共享内存的创建者来控制对于这块内存的访问权限和它的 key //是公开或私有。如果有足够的权限它也可以把共享内存锁定在物理内存中。 
+
+
+//系统V共享内存是以文件的形式组织在特殊文件系统shm中的。通过shmget可以创建或获得共享内存的标识符。取得共享内存标识符后，要通过shmat将这个内存区映射到本进程的虚拟地址空间。
+//系统V共享内存原理
+//系统V共享内存指的是把共享数据放在共享内存区域（IPC shared memory //region），任何想要访问该数据的进程通过共享该内存区域来获得访问权。系统V共享内存通过shmget获得或创建一个IPC共享内存区域，并返回相应的标识符。
+//内核在保证shmget获得或创建一个共享内存区，初始化该共享内存区相应的 //shmid_kernel结构注同时，还将在特殊文件系统shm中，创建并打开一个同名文件，并在内存中建立起该文件的相应dentry及inode结 //构，新打开的文件不属于任何一个进程（任何进程都可以访问该共享内存区）。所有这一切都是系统调用shmget完成的。
+
 
 struct shmid_kernel /* private to the kernel 内核私有,它是存储管理和文件系统结合起来的桥梁*/
 {	
@@ -395,7 +402,7 @@ static inline unsigned long copy_shminfo_to_user(void *buf, struct shminfo64 *in
 //shm_get_stat()循环通过所有的共享内存结构，并计算在使用共享内存的总内存页面数和共享内存页交换的总数。每个共享内存段都有一个文件结构和inode结构。因为所需的数据是通过索引节点获得，每个被访问的inode结构的自旋锁按顺序锁定和解锁。
 static void shm_get_stat (unsigned long *rss, unsigned long *swp) 
 {
-	struct shmem_inode_info *info;
+	struct shmem_inode_info *info;//共享节点信息
 	int i;
 
 	*rss = 0;
@@ -481,7 +488,7 @@ asmlinkage long sys_shmctl (int shmid, int cmd, struct shmid_ds *buf)
 		int result;
 		//空间设置
 		memset(&tbuf, 0, sizeof(tbuf));
-		shp = shm_lock(shmid);
+		shp = shm_lock(shmid);//SHM_LOCK的意义在于锁定这块共享内存并禁止它交换。
 		if(shp==NULL)
 			return -EINVAL;
 		if(cmd==SHM_STAT) {
@@ -508,7 +515,7 @@ asmlinkage long sys_shmctl (int shmid, int cmd, struct shmid_ds *buf)
 		tbuf.shm_cpid	= shp->shm_cprid;
 		tbuf.shm_lpid	= shp->shm_lprid;
 		tbuf.shm_nattch	= shp->shm_nattch;
-		shm_unlock(shmid);
+		shm_unlock(shmid);//共享内存解除锁定
 		if(copy_shmid_to_user (buf, &tbuf, version))
 			return -EFAULT;
 		return result;
@@ -534,7 +541,7 @@ asmlinkage long sys_shmctl (int shmid, int cmd, struct shmid_ds *buf)
 			shp->shm_flags |= SHM_LOCKED;
 		} else {
 			shmem_lock(shp->shm_file, 0);
-			shp->shm_flags &= ~SHM_LOCKED;//解锁
+			shp->shm_flags &= ~SHM_LOCKED;//共享内存解除锁定
 		}
 		shm_unlock(shmid);
 		return err;
@@ -553,11 +560,11 @@ asmlinkage long sys_shmctl (int shmid, int cmd, struct shmid_ds *buf)
 		 *	the name away when the usage hits zero.
 		 */
 		down(&shm_ids.sem);
-		shp = shm_lock(shmid);//上锁
+		shp = shm_lock(shmid);//SHM_LOCK的意义在于锁定这块共享内存并禁止它交换。
 		err = -EINVAL;
 		if (shp == NULL) 
 			goto out_up;
-		err = shm_checkid(shp, shmid);
+		err = shm_checkid(shp, shmid);//查看id号是否合理
 		if(err)
 			goto out_unlock_up;
 		if (current->euid != shp->shm_perm.uid &&
@@ -574,7 +581,7 @@ asmlinkage long sys_shmctl (int shmid, int cmd, struct shmid_ds *buf)
 			shm_destroy (shp);
 
 		/* Unlock */
-		shm_unlock(shmid);
+		shm_unlock(shmid);//共享内存解除锁定
 		up(&shm_ids.sem);
 		return err;
 	}
@@ -584,11 +591,11 @@ asmlinkage long sys_shmctl (int shmid, int cmd, struct shmid_ds *buf)
 		if(copy_shmid_from_user (&setbuf, buf, version))
 			return -EFAULT;
 		down(&shm_ids.sem);
-		shp = shm_lock(shmid);
+		shp = shm_lock(shmid);//SHM_LOCK的意义在于锁定这块共享内存并禁止它交换。
 		err=-EINVAL;
 		if(shp==NULL)
 			goto out_up;
-		err = shm_checkid(shp,shmid);
+		err = shm_checkid(shp,shmid);//查看id号是否合理
 		if(err)
 			goto out_unlock_up;
 		err=-EPERM;
@@ -613,12 +620,12 @@ asmlinkage long sys_shmctl (int shmid, int cmd, struct shmid_ds *buf)
 
 	err = 0;
 out_unlock_up:
-	shm_unlock(shmid);
+	shm_unlock(shmid);//共享内存解除锁定
 out_up:
 	up(&shm_ids.sem);
 	return err;
 out_unlock:
-	shm_unlock(shmid);
+	shm_unlock(shmid);//共享内存解除锁定
 	return err;
 }
 
@@ -632,7 +639,7 @@ out_unlock:
 //第二个参数，shm_addr指定共享内存连接到当前进程中的地址位置，通常为空，表示让系统来选择共享内存的地址。
 //第三个参数，shm_flg是一组标志位，通常为0。
 //调用成功时返回一个指向共享内存第一个字节的指针，如果调用失败返回-1.
-asmlinkage long sys_shmat (int shmid, char *shmaddr, int shmflg, ulong *raddr)
+asmlinkage long sys_shmat (int shmid, char *shmaddr, int shmflg, ulong *raddr)//asmlinkage是限定词
 {
 	struct shmid_kernel *shp;
 	unsigned long addr;
@@ -646,14 +653,14 @@ asmlinkage long sys_shmat (int shmid, char *shmaddr, int shmflg, ulong *raddr)
 	void *user_addr;
 
 	if (shmid < 0)
-		return -EINVAL;
+		return -EINVAL;//宏: int EINVAL 无效的参数。用来指出传递给库函数参数时候的各种问题。
 
 	if ((addr = (ulong)shmaddr)) {
 		if (addr & (SHMLBA-1)) {
 			if (shmflg & SHM_RND)
 				addr &= ~(SHMLBA-1);	   /* round down 四舍五入到SHMLBA*/
 			else//如果shmaddr不是SHMLBA的整数倍或者shm_rnd没有指定，那么EINVAL返回
-				return -EINVAL;
+				return -EINVAL;//宏: int EINVAL 无效的参数。用来指出传递给库函数参数时候的各种问题。
 		}
 		flags = MAP_SHARED | MAP_FIXED; //映射的内存所做的修改同样影响到文件
 	} else {
@@ -680,7 +687,7 @@ asmlinkage long sys_shmat (int shmid, char *shmaddr, int shmflg, ulong *raddr)
 	 */
 	shp = shm_lock(shmid);
 	if(shp == NULL)
-		return -EINVAL;
+		return -EINVAL;//宏: int EINVAL 无效的参数。用来指出传递给库函数参数时候的各种问题。
 	err = shm_checkid(shp,shmid);
 	if (err) {
 		shm_unlock(shmid);
@@ -698,7 +705,9 @@ asmlinkage long sys_shmat (int shmid, char *shmaddr, int shmflg, ulong *raddr)
 
 	down_write(&current->mm->mmap_sem);//写者使用该函数来得到读写信号量sem，它也会导致调用者睡眠，因此只能在进程上下文使用
 	if (addr && !(shmflg & SHM_REMAP)) {
-		user_addr = ERR_PTR(-EINVAL);
+		user_addr = ERR_PTR(-EINVAL);//宏: int EINVAL 无效的参数。用来指出传递给库函数参数时候的各种问题。
+		//开发者根据内核的地址空间特点用了一种新的方法来获得错误码，那就是PTR_ERR,ERR_PTR,IS_ERR这三个宏
+		
 		if (find_vma_intersection(current->mm, addr, addr + size))
 			goto invalid;
 		/*
@@ -729,7 +738,7 @@ invalid:
 	*raddr = (unsigned long) user_addr;
 	err = 0;
 	if (IS_ERR(user_addr))
-		err = PTR_ERR(user_addr);
+		err = PTR_ERR(user_addr);//获得错误码的一种方法：宏PTR_ERR
 	return err;
 
 }
@@ -744,7 +753,7 @@ asmlinkage long sys_shmdt (char *shmaddr)
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *shmd, *shmdnext;
 
-	down_write(&mm->mmap_sem);
+	down_write(&mm->mmap_sem);//写者用来获取sem,若没获得时,则调用者睡眠等待。
 	for (shmd = mm->mmap; shmd; shmd = shmdnext) {
 		shmdnext = shmd->vm_next;
 		if (shmd->vm_ops == &shm_vm_ops
@@ -752,6 +761,16 @@ asmlinkage long sys_shmdt (char *shmaddr)
 			do_munmap(mm, shmd->vm_start, shmd->vm_end - shmd->vm_start);//撤消对共享内存段的虚拟地址映射
 	}
 	up_write(&mm->mmap_sem);
+	
+	/*
+	//http://blog.csdn.net/wangpengqi/article/details/8043340 (内核同步机制：读写信号量)
+	void down_write(struct rw_semaphore *sem);
+         写者使用该函数来得到读写信号量sem，它也会导致调用者睡眠，因此只能在进程上下文使用。
+    void up_write(struct rw_semaphore *sem);
+         写者调用该函数释放信号量sem。它与down_write或down_write_trylock配对使用。
+		 如果down_write_trylock返回0，不需要调用up_write，因为返回0表示没有获得该读写信号量。
+	*/
+	
 	return 0;
 }
 

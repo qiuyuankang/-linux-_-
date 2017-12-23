@@ -58,17 +58,35 @@
  */
 /*
 在重写代码实现注意事项（EricSchenk，1995年1月）：
-为了解决一些问题，这段代码进行了大量的重写。与原始代码。尤其是原始代码未能唤醒过程，等待semval去变为0，如果值达到0，它将迅速增加。在解决这个问题我也修改了实现使它以FIFO方式处理未决操作，从而提供保证等待信号量锁定的进程不会饿死。除非另一个锁定进程无法解锁。
+为了解决一些问题，这段代码进行了大量的重写。与原始代码。
+尤其是原始代码未能唤醒过程，等待semval去变为0，如果值达到0，它将迅速增加。
+在解决这个问题我也修改了实现使它以FIFO方式处理未决操作，
+从而提供保证等待信号量锁定的进程不会饿死。
+除非另一个锁定进程无法解锁。
 
 此外，还介绍了以下两种行为变化： 
--SEMOP原执行的返回值成功检查最后信号量元素。这不匹配手册页规格，并有效允许用户读取信号量，即使他们没有读取权限。现在实现返回0。关于手册页所述的成功。对撤销调整集是否有一些混淆。在出口处执行的工作应以原子方式进行。
-即，如果我们试图减少semval要排队等等，直到我们可以合法地这么做？最初的实现试图做到这一点。但是目前的执行情况并非如此，这是因为我没有认为这是正确的事（TM）做，因为我不能通过新的设计看到一个整洁的方式来获得旧的行为。
+-SEMOP原执行的返回值成功检查最后信号量元素。
+这不匹配手册页规格，并有效允许用户读取信号量，即使他们没有读取权限。
+现在实现返回0。关于手册页所述的成功。对撤销调整集是否有一些混淆。
+在出口处执行的工作应以原子方式进行。
+即，如果我们试图减少semval要排队等等，直到我们可以合法地这么做？
+最初的实现试图做到这一点。
+但是目前的执行情况并非如此，这是因为我没有认为这是正确的事（TM）做，
+因为我不能通过新的设计看到一个整洁的方式来获得旧的行为。
 
-POSIX标准和SVID应确定授权的行为是什么？在进一步细化笔记（Christoph Rohland，1998年12月）：
+POSIX标准和SVID应确定授权的行为是什么？
+在进一步细化笔记（Christoph Rohland，1998年12月）：
 
 -POSIX标准说，那个撤消调整简单应重做。所以目前的实施是好的。以前的代码有两个缺陷：
-1）主动给下一个信号量休眠的等待过程发出信号量。因为这个过程没有CPU，这导致许多不必要的上下文切换和坏性能。现在我们只检查哪个进程应该能够获取信号量，如果这个过程想减少一些信号量值，我们只是在无操作的情况下叫醒它。因此，它必须设法得到它以后。因如运行过程中可能获取信号量时的电流时间片。如果它只等待零或增加信号量，我们提前做操作并唤醒它。
-2）它没有唤醒所有零等待进程。我们尽力去做但只有SEMOPS权利，只能等待零或增加。如果操作中有递减操作数组，我们做的和以前一样。
+1）主动给下一个信号量休眠的等待过程发出信号量。
+因为这个过程没有CPU，这导致许多不必要的上下文切换和坏性能。
+现在我们只检查哪个进程应该能够获取信号量，如果这个过程想减少一些信号量值，
+我们只是在无操作的情况下叫醒它。因此，它必须设法得到它以后。
+因如运行过程中可能获取信号量时的电流时间片。如果它只等待零或增加信号量，
+我们提前做操作并唤醒它。
+2）它没有唤醒所有零等待进程。
+我们尽力去做但只有SEMOPS权利，只能等待零或增加。
+如果操作中有递减操作数组，我们做的和以前一样。
 */
 
 #include <linux/config.h>
@@ -244,7 +262,7 @@ struct sem_array {
 //调用返回：成功返回信号量集描述字，否则返回-1。 
 asmlinkage long sys_semget (key_t key, int nsems, int semflg)
 {
-	int id, err = -EINVAL;
+	int id, err = -EINVAL;//EINVAL: Invalid argument(非法值，非法争论，非法论点)
 	struct sem_array *sma;
 
 	if (nsems < 0 || nsems > sc_semmsl)//包含信号量数目不合法
@@ -266,7 +284,7 @@ asmlinkage long sys_semget (key_t key, int nsems, int semflg)
 		if(sma==NULL)
 			BUG();
 		if (nsems > sma->sem_nsems)//新加入信号量长度过长
-			err = -EINVAL;
+			err = -EINVAL;  // EINVAL： Invalid argument
 		else if (ipcperms(&sma->sem_perm, semflg))//检查访问权限是否符合规则
 			err = -EACCES;
 		else
@@ -936,7 +954,7 @@ struct  seminfo {
 		up(&sem_ids.sem);
 		return err;
 	default:
-		return -EINVAL;
+		return -EINVAL;//EINVAL： Invalid argument
 	}
 }
 
@@ -1002,7 +1020,7 @@ semid是信号量集ID，sops指向数组的每一个sembuf结构都刻画一个
 */
 asmlinkage long sys_semop (int semid, struct sembuf *tsops, unsigned nsops)
 {
-	int error = -EINVAL;
+	int error = -EINVAL;//EINVAL： Invalid argument
 	struct sem_array *sma;
 	struct sembuf fast_sops[SEMOPM_FAST];
 	struct sembuf* sops = fast_sops, *sop;

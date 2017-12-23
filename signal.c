@@ -245,7 +245,7 @@ static int collect_signal(int sig, struct sigpending *list, siginfo_t *info)
 		/* Collect the siginfo appropriate to this signal.  */  
 		/* 收集与此信号相关的siginfo。*/
 		struct sigqueue *q, **pp;
-		pp = &list->head;
+		pp = &list->head;//pp指向第一个信号成员的next指针
 		while ((q = *pp) != NULL) {
 			if (q->info.si_signo == sig)
 				goto found_it;
@@ -269,7 +269,7 @@ static int collect_signal(int sig, struct sigpending *list, siginfo_t *info)
 		info->si_uid = 0;    
 		return 1;
 
-found_it:
+found_it:    // 将找到信号成员从信号队列中删除
 		if ((*pp = q->next) == NULL)
 			list->tail = pp;
 
@@ -281,7 +281,7 @@ found_it:
 		atomic_dec(&nr_queued_signals);
 
 		/* Non-RT signals can exist multiple times.. */
-		/* 非rt信号可以存在多次。 */ 
+		/* 非RT信号可以存在多次。 */ 
 		if (sig >= SIGRTMIN) {
 			while ((q = *pp) != NULL) {
 				if (q->info.si_signo == sig)
@@ -553,6 +553,15 @@ static void handle_stop_signal(int sig, struct task_struct *t)
 		t->exit_code = 0;
 		rm_sig_from_queue(SIGSTOP, t);//丢弃消息队列;
 		rm_sig_from_queue(SIGTSTP, t);
+		/*
+        SIGTSTP和SIGSTOP的区别：  SIGTSTP与SIGSTOP都是 
+        使进程暂停（都使用SIGCONT让进程重新激活）。
+        唯一的区别是SIGSTOP不可以捕获。
+        捕捉SIGTSTP后一般处理如下：
+        1）处理完额外的事
+        2）恢复默认处理
+        3）发送SIGTSTP信号给自己。（使进程进入suspend状态。）
+        */
 		rm_sig_from_queue(SIGTTOU, t);
 		rm_sig_from_queue(SIGTTIN, t);
 		break;
@@ -1004,7 +1013,7 @@ kill_proc(pid_t pid, int sig, int priv)
  */
  
 /*
- *快乐。与否。Pthread希望我们唤醒每一个线程
+ *无论如何，Pthread希望我们唤醒每一个线程
  *在我们的父母群体中。
  */
 
@@ -1220,11 +1229,16 @@ long do_sigpending(void *set, unsigned long sigsetsize)
 	if (sigsetsize > sizeof(sigset_t))
 		goto out;
 
-	spin_lock_irq(&current->sigmask_lock);//禁止本地中断获取指定的锁
-	sigandsets(&pending, &current->blocked, &current->pending.signal);
+	spin_lock_irq(&current->sigmask_lock);//加锁
+	
+	/*Outside the lock because only this thread touches it.*/
+	                                      
+	sigandsets(&pending, &current->blocked, &current->pending.signal);//最后将待决信号和阻塞的信号取交集，因为待决信号并不一定是阻塞的，有可能是还没来得及投递的，所以这里要取交集
 	spin_unlock_irq(&current->sigmask_lock);
 	//释放指定的锁，并激活本地中断
 
+	
+	
 	error = -EFAULT;
 	if (!copy_to_user(set, &pending, sigsetsize))
 		//内核空间到用户空间的复制

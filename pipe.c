@@ -171,21 +171,28 @@ do_more_read:
 	/* Read what data is available. 读取可用的数据。 */
 	ret = -EFAULT;
 	while (count > 0 && (size = PIPE_LEN(*inode))) {
-		char *pipebuf = PIPE_BASE(*inode) + PIPE_START(*inode);
-		ssize_t chars = PIPE_MAX_RCHUNK(*inode);     
+		char *pipebuf = PIPE_BASE(*inode) + PIPE_START(*inode);// 获取管道缓冲区读首地址
+		ssize_t chars = PIPE_MAX_RCHUNK(*inode);// 缓冲区可读最大值=PIPE\_SIZE - PIPE\_START(inode)
 
+		// 下面两个if语句用于比较缓冲区可读最大值，缓冲区数据长度以及
+	    // 用户态缓冲区的长度，取最小值
 		if (chars > count)
 			chars = count;
 		if (chars > size)
 			chars = size;
 
-		if (copy_to_user(buf, pipebuf, chars))   // 拷贝给用户  
+		// 调用如下函数把数据拷贝到用户态
+		if (copy_to_user(buf, pipebuf, chars))  
 			goto out;
 
 		read += chars;
+		// 更新缓冲区读首地址
 		PIPE_START(*inode) += chars;
+		// 对缓冲区长度取模
 		PIPE_START(*inode) &= (PIPE_SIZE - 1);
+		// 更新缓冲区数据长度
 		PIPE_LEN(*inode) -= chars;
+		// 更新用户态缓冲区长度
 		count -= chars;
 		buf += chars;
 	}
@@ -313,7 +320,12 @@ pipe_write(struct file *filp, const char *buf, size_t count, loff_t *ppos)
 			pipe_wait(inode);
 			PIPE_WAITING_WRITERS(*inode)--;
 
-			ret = -ERESTARTSYS;               
+			ret = -ERESTARTSYS; 
+            /*
+            -ERESTARTSYS 到底是什么意思? 
+            -ERESTARTSYS表示信号函数处理完毕后
+            重新执行信号函数前的某个系统调用.
+            */			
 			if (signal_pending(current))
 				goto out;
             
@@ -385,7 +397,7 @@ pipe_write(struct file *filp, const char *buf, size_t count, loff_t *ppos)
 			
 		} while (!PIPE_FREE(*inode));
 		
-		ret = -EFAULT;
+		ret = -EFAULT;//EFAULT: Bad address
 	}
 	
 	
@@ -431,7 +443,7 @@ bad_pipe_r(struct file *filp, char *buf, size_t count, loff_t *ppos)
 static ssize_t
 bad_pipe_w(struct file *filp, const char *buf, size_t count, loff_t *ppos)
 {
-	return -EBADF;
+	return -EBADF;//EBADF: Bad file number(错误文件号)
 }
 
 //pipe_ioctl会在系统调用ioctl中调用，设置硬件控制寄存器，或者读取硬件状态寄存器的数值
@@ -441,7 +453,7 @@ pipe_ioctl(struct inode *pino, struct file *filp,
 	   unsigned int cmd, unsigned long arg)
 {
 	switch (cmd) {
-		case FIONREAD:
+		case FIONREAD: // FIONREAD: 就是返回缓冲区有多少字节。
 			return put_user(PIPE_LEN(*pino), (int *)arg);
 		default:
 			return -EINVAL;// Invalid argument 无效参数
@@ -824,9 +836,9 @@ dentry是一个内存实体，其中的d_inode成员指向对应的inode
 	return 0;
 
 close_f12_inode_i_j:
-	put_unused_fd(j);
+	put_unused_fd(j);//释放文件描述符
 close_f12_inode_i:
-	put_unused_fd(i);
+	put_unused_fd(i);//释放文件描述符
 close_f12_inode:
 	free_page((unsigned long) PIPE_BASE(*inode));
 	kfree(inode->i_pipe);
@@ -890,6 +902,15 @@ static struct super_block * pipefs_read_super(struct super_block *sb, void *data
 	sb->s_root->d_sb = sb;
 	sb->s_root->d_parent = sb->s_root;
 	d_instantiate(sb->s_root, root);
+	
+	/*
+	Eric Paris <[email protected]>在08/29/2006 03:08:25 PM:
+    已知的一个文件系统，即CIFS，称为d_instantiate
+    在为某些操作设置模式之前。它将创建一个
+    在执行目录搜索时，对任何子节点进行dentry
+    调用d_instantiate。
+	*/
+	
 	return sb;
 }
 
