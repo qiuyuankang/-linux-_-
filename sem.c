@@ -1139,6 +1139,7 @@ asmlinkage long sys_semop (int semid, struct sembuf *tsops, unsigned nsops)
 		{
 			error = try_atomic_semop (sma, sops, nsops, un,
 						  current->pid,0);
+			//函数try_atomic_semop决定一系列信号量操作是否成功，如果成功就返回0，返回1表示需要睡眠，其他表示错误。
 			if (error <= 0) 
 				break;
 		} else {
